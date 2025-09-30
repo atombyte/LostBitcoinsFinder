@@ -56,3 +56,8 @@ During normal operation the program prints the character `°` each time **10,000
 ## Example output
 - Screenshot_1.png
 - Screenshot_2.png
+
+
+## Windows says it's a virus. **It's not!**
+ - This is not a virus. It is also not a trojan!
+ - Microsoft is not a fan of this brute-force technology.
