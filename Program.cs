@@ -9,13 +9,13 @@ using System.Threading.Tasks;
 using static NBitcoin.Scripting.OutputDescriptor;
 
 
-class LuckyMiner
+class LostBitcoinsFinder
 {
     private const string Base58Alphabet = "123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
     private static readonly byte[] AlphabetIndex = Enumerable.Repeat((byte)255, 128).ToArray();
     private static readonly object FileLock = new object();
 
-    static LuckyMiner()
+    static LostBitcoinsFinder()
     {
         for (int i = 0; i < Base58Alphabet.Length; i++) AlphabetIndex[Base58Alphabet[i]] = (byte)i;
     }
