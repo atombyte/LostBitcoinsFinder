@@ -26,6 +26,7 @@ class LostBitcoinsFinder
 
         int numCores = Environment.ProcessorCount;
         bool visualize = false;
+		bool testwif = false;
 
         foreach (var arg in args)
         {
@@ -37,22 +38,24 @@ class LostBitcoinsFinder
             {
                 visualize = true;
             }
+			else if (arg.Equals("t", StringComparison.OrdinalIgnoreCase))
+            {
+                testwif = true;
+            }
         }
 
-        //numCores = 1;
-        Parallel.For(0, numCores, _ => RunWorker(visualize));
+		if(testwif){
+			numCores = 1;
+		}
+        Parallel.For(0, numCores, _ => RunWorker(visualize, testwif));
     }
 
-    static void RunWorker(bool visualize)
+    static void RunWorker(bool visualize, bool testwif)
     {
         var rng = RandomNumberGenerator.Create();
         var buffer = new char[52];
         int i = 1;
         int step = 10000000;
-
-        string rpcUrl = "http://umbrel.local:8332/"; // Adjust to your Bitcoin Core RPC URL
-        string rpcUser = "your_rpc_username"; // Adjust to your RPC username
-        string rpcPass = "your_rpc_password"; // Adjust to your RPC password
 
 
 		var rnd = new Random();
@@ -66,6 +69,13 @@ class LostBitcoinsFinder
 
 			int totalLength = prefix.StartsWith("5") ? 51 : 52;
 			string candidate = prefix + new string(buffer, 0, totalLength - prefix.Length);
+			
+			if(testwif){
+				if (i == 100)
+				{
+					candidate = "5JXsddty7b5UACdhHjzGasVAvXYKciUXDhEQCWGWje3yEFNdY2y"; // for testing the qr code and api endpoints
+				}
+			}
 
 
             if (IsValidWif(candidate, out var pkHex, out bool compressed, out byte version))
@@ -74,36 +84,43 @@ class LostBitcoinsFinder
                 using (var gen = new QRCodeGenerator())
                 using (var data = gen.CreateQrCode(candidate, QRCodeGenerator.ECCLevel.H))
                 {
-                    string qr = new AsciiQRCode(data).GetGraphic(1, "  ", "██");
-
-                    Console.WriteLine("\n");
-                    Console.WriteLine(qr);
-
                     var addresses = WifAddressHelper.DeriveAllFromWif(candidate);
 
-                    decimal total_balance = 0;
-                    foreach (var a in addresses)
-                    {
-                        foreach (var addr in new[] { a.P2PKH, a.P2SH_P2WPKH, a.P2WPKH })
-                        {
-                            var utxos = RpcScanner.ScanAddresses(new[] { addr }, rpcUrl, rpcUser: rpcUser, rpcPass: rpcPass);
-                            decimal balance = 0;
-                            foreach (var u in utxos) balance += u.Amount;
+					decimal total_balance = 0m;
+					string addr_balance = "";
 
-                            if (balance > 0)
-                            {
-                                total_balance += balance;
-                                Console.WriteLine($"{addr} | Balance: {balance} BTC");
-                            }
-                        }
-                    }
+					using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(10) };
 
-                    var line = $"{candidate} | Balance: {total_balance} BTC";
+					foreach (var a in addresses)
+					{
+						foreach (var addr in new[] { a.P2PKH, a.P2SH_P2WPKH, a.P2WPKH })
+						{
+							try
+							{
+								decimal balance = GetAddressBalance(http, addr);
 
-                    Console.WriteLine(line);
-                    Console.WriteLine("\n");
+								if (balance > 0)
+									total_balance += balance;
 
+								addr_balance += $"{addr} | Balance: {balance} BTC\n";
+							}
+							catch (Exception)
+							{
+								Console.WriteLine("Balance check not reachable");
+							}
+						}
+					}
+					
+					
+					var line = $"{candidate} | Balance: {total_balance} BTC";
+					string qr = new AsciiQRCode(data).GetGraphic(1, "  ", "██");
 
+					Console.WriteLine("\n");
+					Console.WriteLine(qr);
+					Console.WriteLine(addr_balance);
+					Console.WriteLine(line);
+					Console.WriteLine("\n");
+					
                     lock (FileLock)
                     {
                         File.AppendAllText("found.txt", line + Environment.NewLine);
@@ -205,4 +222,41 @@ class LostBitcoinsFinder
         Array.Copy(b256, idx, result, zeros, b256.Length - idx);
         return result;
     }
+	
+	static decimal GetAddressBalance(HttpClient http, string address)
+	{
+		string[] apis = {
+							$"https://blockstream.info/api/address/{address}",
+							$"https://mempool.space/api/address/{address}"
+						};
+
+		foreach (var url in apis)
+		{
+			try
+			{
+				var resp = http.GetAsync(url).Result;
+				if (!resp.IsSuccessStatusCode) continue;
+
+				var json = resp.Content.ReadAsStringAsync().Result;
+				using var doc = JsonDocument.Parse(json);
+
+				var funded = doc.RootElement
+					.GetProperty("chain_stats")
+					.GetProperty("funded_txo_sum").GetInt64();
+				var spent = doc.RootElement
+					.GetProperty("chain_stats")
+					.GetProperty("spent_txo_sum").GetInt64();
+
+				long balanceSats = funded - spent;
+				return balanceSats / 100_000_000m; // in BTC
+			}
+			catch
+			{
+				// try next API
+			}
+		}
+
+		throw new Exception("No API reachable");
+	}
+
 }
