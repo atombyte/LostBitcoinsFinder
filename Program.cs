@@ -156,6 +156,9 @@ class LostBitcoinsFinder
 
         if (payloadLen != 33 && payloadLen != 34) return false;
         version = payload[0];
+		
+		if (version != 0x80)
+			return false;
 
         var key = new byte[32];
         Array.Copy(payload, 1, key, 0, 32);
