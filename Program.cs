@@ -58,12 +58,18 @@ class LostBitcoinsFinder
         while (true)
         {
             FillRandomBase58(rng, buffer);
-            string candidate = new string(buffer);
+
+            string candidate = (new Random().Next(3)) switch
+            {
+                0 => 'L' + new string(buffer)[1..],
+                1 => 'K' + new string(buffer)[1..],
+                _ => '5' + new string(buffer)[2..]
+            };
 
 
             if (IsValidWif(candidate, out var pkHex, out bool compressed, out byte version))
             {
-                
+
                 using (var gen = new QRCodeGenerator())
                 using (var data = gen.CreateQrCode(candidate, QRCodeGenerator.ECCLevel.H))
                 {
@@ -90,9 +96,9 @@ class LostBitcoinsFinder
                             }
                         }
                     }
-                    
+
                     var line = $"{candidate} | Balance: {total_balance} BTC";
-                    
+
                     Console.WriteLine(line);
                     Console.WriteLine("\n");
 
@@ -103,7 +109,7 @@ class LostBitcoinsFinder
                     }
 
                 }
-                
+
             }
             else
             {
@@ -111,8 +117,12 @@ class LostBitcoinsFinder
             }
 
 
-
-            if (i % step == 1) Console.Write("°");
+			if (i % step == 1)
+			{
+				i = 1;
+				Console.Write("°");
+			}
+			
             i++;
         }
     }
