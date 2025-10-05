@@ -123,7 +123,7 @@ class LostBitcoinsFinder
 					
                     lock (FileLock)
                     {
-                        File.AppendAllText("found.txt", line + Environment.NewLine);
+                        File.AppendAllText("found.txt", addr_balance + Environment.NewLine + line + Environment.NewLine);
                     }
 
                 }
