@@ -55,16 +55,17 @@ class LostBitcoinsFinder
         string rpcPass = "your_rpc_password"; // Adjust to your RPC password
 
 
+		var rnd = new Random();
+		string[] prefixes = { "5J", "5K", "5H", "L1", "L2", "Kx", "Kz" };
+
         while (true)
         {
             FillRandomBase58(rng, buffer);
 
-            string candidate = (new Random().Next(3)) switch
-            {
-                0 => 'L' + new string(buffer)[1..],
-                1 => 'K' + new string(buffer)[1..],
-                _ => '5' + new string(buffer)[2..]
-            };
+            string prefix = prefixes[rnd.Next(prefixes.Length)];
+
+			int totalLength = prefix.StartsWith("5") ? 51 : 52;
+			string candidate = prefix + new string(buffer, 0, totalLength - prefix.Length);
 
 
             if (IsValidWif(candidate, out var pkHex, out bool compressed, out byte version))
